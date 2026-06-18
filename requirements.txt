@@ -1,0 +1,10 @@
+# Financial Reality Engine — Python dependencies
+# Install with: pip3 install -r requirements.txt
+#
+# Everything else (tkinter, sqlite3, csv, logging, shutil) is part
+# of Python's standard library and needs no installation.
+
+matplotlib>=3.9.0
+reportlab>=4.0.0
+schedule>=1.2.0
+pytest>=8.0.0   # only needed to run the test suite
