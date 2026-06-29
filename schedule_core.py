@@ -1081,6 +1081,83 @@ class OpportunityMode(_DisplayBase):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# MODE 4 — INCOME MODE
+#
+# Calculates exactly how much you will earn this week from your scheduled
+# shifts.  Breaks down earnings per job, then shows a weekly total.
+# No free-time data — just the money.
+# ─────────────────────────────────────────────────────────────────────────────
+
+class IncomeMode(_DisplayBase):
+    """
+    Show exactly how much you will earn this week from your scheduled shifts.
+
+    Breaks down earnings per job and shift, then shows total hours,
+    total income, and weighted average hourly rate for the week.
+
+    Usage:
+        IncomeMode(sched).display()
+    """
+
+    def display(self) -> None:
+        schedule = self._sched.get_weekly_schedule()
+
+        # Aggregate shifts by job name
+        by_job: dict[str, dict] = {}
+        for day in _DAYS:
+            for s in schedule[day]:
+                if s.job_name not in by_job:
+                    by_job[s.job_name] = {
+                        "shifts":      [],
+                        "total_hours": 0.0,
+                        "hourly_rate": s.hourly_rate,
+                        "income":      0.0,
+                    }
+                by_job[s.job_name]["shifts"].append(s)
+                by_job[s.job_name]["total_hours"] += s.hours
+                by_job[s.job_name]["income"]      += s.income
+
+        # Round per-job totals
+        for info in by_job.values():
+            info["total_hours"] = round(info["total_hours"], 2)
+            info["income"]      = round(info["income"],      2)
+
+        total_hours  = round(sum(v["total_hours"] for v in by_job.values()), 2)
+        total_income = round(sum(v["income"]      for v in by_job.values()), 2)
+        avg_rate     = round(total_income / total_hours, 2) if total_hours else 0.0
+
+        self._header("INCOME MODE  ·  This Week's Earnings")
+
+        if not by_job:
+            self._blank()
+            self._row("No shifts scheduled yet.")
+            self._row("Add shifts with:  sched.add_shift(...)")
+            self._blank()
+            print("═" * _W)
+            return
+
+        for job_name, info in sorted(by_job.items()):
+            self._blank()
+            self._row(f"▸ {job_name}  (${info['hourly_rate']:.2f}/hr)", indent=2)
+            print("  " + "─" * (_W - 2))
+            for s in info["shifts"]:
+                line = f"{s.day:12s}  {s.display_range}"
+                self._row(line, f"({_fmt_hours(s.hours)})  →  ${s.income:.2f}")
+            self._blank()
+            self._row(
+                f"Subtotal:  {_fmt_hours(info['total_hours'])}",
+                f"${info['income']:.2f}",
+            )
+
+        self._blank()
+        print("═" * _W)
+        self._row("TOTAL HOURS",  _fmt_hours(total_hours))
+        self._row("TOTAL INCOME", f"${total_income:.2f}")
+        self._row("AVG RATE",     f"${avg_rate:.2f}/hr")
+        print("═" * _W)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # DEMO — run this file directly to see all four modes
 # python schedule_core.py
 # ─────────────────────────────────────────────────────────────────────────────
