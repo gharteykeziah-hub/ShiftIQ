@@ -49,9 +49,8 @@ from dataclasses import dataclass, field
 # Path to the SQLite database file (same folder as this script)
 _DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "finance.db")
 
-# The active portion of each day for free-time calculations
-_DAY_START = "08:00"
-_DAY_END   = "22:00"
+# The active portion of each day — sourced from config so one change affects everything
+from config import DAY_START as _DAY_START, DAY_END as _DAY_END
 
 # Canonical day order
 _DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday",

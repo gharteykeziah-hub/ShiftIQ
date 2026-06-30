@@ -40,6 +40,7 @@ Dependencies
 from __future__ import annotations
 
 from schedule_event import ScheduleEvent, DAYS, to_minutes, from_minutes, fmt_time
+from config import DAY_START as _DAY_START, DAY_END as _DAY_END
 
 
 # ── Free time analysis ────────────────────────────────────────────────────────
@@ -94,8 +95,8 @@ def _free_gaps(
 
 def get_free_blocks(
     events: list[ScheduleEvent],
-    day_start: str = "08:00",
-    day_end:   str = "22:00",
+    day_start: str = _DAY_START,
+    day_end:   str = _DAY_END,
 ) -> list[dict]:
     """
     Find free (unscheduled) time blocks within a day window.
@@ -124,8 +125,8 @@ def get_free_blocks(
 
 def largest_free_block(
     events: list[ScheduleEvent],
-    day_start: str = "08:00",
-    day_end:   str = "22:00",
+    day_start: str = _DAY_START,
+    day_end:   str = _DAY_END,
 ) -> dict | None:
     """
     Return the single largest free block for the day, or None if fully booked.
@@ -138,8 +139,8 @@ def largest_free_block(
 
 def weekly_availability(
     all_events: list[ScheduleEvent],
-    day_start: str = "08:00",
-    day_end:   str = "22:00",
+    day_start: str = _DAY_START,
+    day_end:   str = _DAY_END,
 ) -> dict:
     """
     Compute weekly totals:

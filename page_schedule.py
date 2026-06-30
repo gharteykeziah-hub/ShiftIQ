@@ -35,6 +35,7 @@ from time_engine import (get_free_blocks, largest_free_block,
                           weekly_availability, detect_conflicts,
                           weekly_income_summary, opportunity_cost)
 import week_engine
+from config import DAY_START, DAY_END
 
 
 # ── Color helpers ─────────────────────────────────────────────────────────────
@@ -733,12 +734,12 @@ class SchedulePage(tk.Frame):
                  fg=theme.MUTED, bg=theme.BG).pack(side="left")
         start_var = ttk.Combobox(ctrl_row, values=[f"{h:02d}:00" for h in range(6, 13)],
                                   state="readonly", width=6, font=F_SMALL)
-        start_var.set("08:00")
+        start_var.set(DAY_START)
         start_var.pack(side="left", padx=(4, 2))
         tk.Label(ctrl_row, text="–", fg=theme.TEXT, bg=theme.BG).pack(side="left")
         end_var = ttk.Combobox(ctrl_row, values=[f"{h:02d}:00" for h in range(18, 24)],
                                 state="readonly", width=6, font=F_SMALL)
-        end_var.set("22:00")
+        end_var.set(DAY_END)
         end_var.pack(side="left", padx=(2, 16))
 
         # Earning potential toggle — off by default
@@ -793,8 +794,8 @@ class SchedulePage(tk.Frame):
         def refresh_free(*_):
             for w in free_frame.winfo_children():
                 w.destroy()
-            day_start = start_var.get() if start_var.get() else "08:00"
-            day_end   = end_var.get()   if end_var.get()   else "22:00"
+            day_start = start_var.get() if start_var.get() else DAY_START
+            day_end   = end_var.get()   if end_var.get()   else DAY_END
             work_rates = _work_rates()
 
             for day in DAYS:

@@ -14,7 +14,12 @@ import activity_log
 from config import (
     LOG_FILE,
     SAVINGS_STRONG, SAVINGS_GOOD, SAVINGS_OK,
-    EXPENSE_RATIO_HIGH,
+    EXPENSE_RATIO_HIGH, EXPENSE_RATIO_RISK,
+    HEALTH_SCORE_STRONG, HEALTH_SCORE_GOOD, HEALTH_SCORE_OK,
+    HEALTH_SCORE_BREAK_EVEN, HEALTH_SCORE_DEFICIT,
+    RISK_SCORE_BASELINE, RISK_PENALTY_DEFICIT_FLOW, RISK_PENALTY_HIGH_EXPENSE,
+    RISK_BONUS_GOOD_SAVINGS, RISK_BONUS_OK_SAVINGS,
+    RISK_PENALTY_NEGATIVE_SAVINGS, RISK_PENALTY_ZERO_BALANCE,
 )
 
 logging.basicConfig(
@@ -249,11 +254,11 @@ class FinancialState:
         50 = breaking even, 20 = deficit.
         """
         s = self.savings_rate()
-        if   s >= SAVINGS_STRONG: return 90
-        elif s >= SAVINGS_GOOD:   return 75
-        elif s >= SAVINGS_OK:     return 60
-        elif s >= 0:              return 50
-        else:                     return 20
+        if   s >= SAVINGS_STRONG: return HEALTH_SCORE_STRONG
+        elif s >= SAVINGS_GOOD:   return HEALTH_SCORE_GOOD
+        elif s >= SAVINGS_OK:     return HEALTH_SCORE_OK
+        elif s >= 0:              return HEALTH_SCORE_BREAK_EVEN
+        else:                     return HEALTH_SCORE_DEFICIT
 
     def risk_score(self) -> int:
         """
@@ -263,13 +268,13 @@ class FinancialState:
         income   = self.total_income_per_week()
         expenses = self.total_expense_per_week()
         savings  = self.savings_rate()
-        score    = 50
+        score    = RISK_SCORE_BASELINE
 
-        if self.net_weekly_flow() < 0:                    score -= 20
-        if income > 0 and expenses / income > 0.8:        score -= 15
-        if   savings >= SAVINGS_GOOD:                     score += 20
-        elif savings >= SAVINGS_OK:                       score += 10
-        elif savings < 0:                                 score -= 25
-        if self.current_balance() <= 0:                   score -= 10
+        if self.net_weekly_flow() < 0:                          score -= RISK_PENALTY_DEFICIT_FLOW
+        if income > 0 and expenses / income > EXPENSE_RATIO_RISK: score -= RISK_PENALTY_HIGH_EXPENSE
+        if   savings >= SAVINGS_GOOD:                           score += RISK_BONUS_GOOD_SAVINGS
+        elif savings >= SAVINGS_OK:                             score += RISK_BONUS_OK_SAVINGS
+        elif savings < 0:                                       score -= RISK_PENALTY_NEGATIVE_SAVINGS
+        if self.current_balance() <= 0:                         score -= RISK_PENALTY_ZERO_BALANCE
 
         return max(0, min(100, score))
