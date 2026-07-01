@@ -137,3 +137,4 @@ uvicorn api:app --reload
 ```
 
 `render.yaml` is included for one-command deployment to Render, Railway, or Heroku.
+# GitHub sync fix
