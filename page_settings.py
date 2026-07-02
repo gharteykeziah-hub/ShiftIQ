@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class SettingsPage(tk.Frame):
-    """Persistent app settings saved to SQLite."""
+    """Settings page: configure simulation runs, projection horizon, and view app info."""
 
     _DEFAULTS = {
         "monte_carlo_runs": 500,
