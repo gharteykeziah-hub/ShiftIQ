@@ -1,8 +1,20 @@
 """
-database.py — SQLite persistence for the ShiftIQ.
+database.py — SQLite persistence for ShiftIQ.
 
-Uses context managers (with sqlite3.connect(...) as conn) throughout
-so connections are always closed safely, even if an error occurs.
+All reads and writes go through this module. No other module issues raw SQL.
+Uses context managers throughout so connections are always closed safely.
+
+Tables
+------
+jobs        : income sources (name, amount, frequency)
+expenses    : recurring costs (name, amount, category, date, frequency)
+settings    : key/value store — currently holds 'balance'
+history     : daily financial snapshots for trend tracking
+events      : scheduled time blocks (shifts, classes, personal time)
+
+On first run, init_db() creates all tables and migrates any legacy schema.
+dedup_jobs() and dedup_expenses() are called at startup to merge near-duplicate
+entries created by variant spellings (e.g. 'admissions' / 'Admissions').
 """
 from __future__ import annotations
 
