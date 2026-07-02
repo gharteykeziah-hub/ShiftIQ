@@ -1233,3 +1233,476 @@ class TestShiftOptimizer:
         result = opt.optimize_shift_selection(cands, max_hours=10)
         assert result.total_income == 190.0
         assert {c.job_name for c in result.selected} == {"Job B", "Job C"}
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  DAY 15 — FinancialState: add/delete/validate (real class, temp DB)
+# ═════════════════════════════════════════════════════════════════════════════
+
+import financial_state as fs_module
+
+
+@pytest.fixture
+def fs(monkeypatch, tmp_path):
+    """Real FinancialState wired to an empty temp database."""
+    db_file = str(tmp_path / "fs_test.db")
+    monkeypatch.setattr(database, "DB_NAME", db_file)
+    monkeypatch.setattr(fs_module, "activity_log", type("_", (), {"log": staticmethod(lambda *a: None)})())
+    return fs_module.FinancialState()
+
+
+class TestFinancialStateAddDelete:
+
+    def test_add_job_success(self, fs):
+        ok, msg = fs.add_job(Job("Barista", 300, "Weekly"))
+        assert ok
+        assert "Barista" in msg
+
+    def test_add_job_persists_to_db(self, fs):
+        fs.add_job(Job("Barista", 300, "Weekly"))
+        assert len(database.load_jobs()) == 1
+
+    def test_add_job_duplicate_rejected(self, fs):
+        fs.add_job(Job("Barista", 300, "Weekly"))
+        ok, msg = fs.add_job(Job("Barista", 400, "Weekly"))
+        assert not ok
+        assert "already exists" in msg.lower()
+
+    def test_add_job_blank_name_rejected(self, fs):
+        ok, msg = fs.add_job(Job("", 300, "Weekly"))
+        assert not ok
+
+    def test_add_job_zero_amount_rejected(self, fs):
+        ok, msg = fs.add_job(Job("X", 0, "Weekly"))
+        assert not ok
+
+    def test_add_job_negative_amount_rejected(self, fs):
+        ok, msg = fs.add_job(Job("X", -50, "Weekly"))
+        assert not ok
+
+    def test_delete_job_success(self, fs):
+        fs.add_job(Job("Barista", 300, "Weekly"))
+        ok, msg = fs.delete_job("Barista")
+        assert ok
+        assert len(fs.jobs) == 0
+
+    def test_delete_job_removes_from_db(self, fs):
+        fs.add_job(Job("Barista", 300, "Weekly"))
+        fs.delete_job("Barista")
+        assert len(database.load_jobs()) == 0
+
+    def test_delete_nonexistent_job_returns_false(self, fs):
+        ok, msg = fs.delete_job("Ghost")
+        assert not ok
+        assert "not found" in msg.lower()
+
+    def test_add_expense_success(self, fs):
+        ok, _ = fs.add_expense(Expense("Rent", 800, "Housing", "2026-01-01", "Monthly"))
+        assert ok
+
+    def test_add_expense_blank_name_rejected(self, fs):
+        ok, _ = fs.add_expense(Expense("", 100, "Food", "2026-01-01", "Monthly"))
+        assert not ok
+
+    def test_add_expense_blank_category_rejected(self, fs):
+        ok, _ = fs.add_expense(Expense("X", 100, "", "2026-01-01", "Monthly"))
+        assert not ok
+
+    def test_add_expense_zero_amount_rejected(self, fs):
+        ok, _ = fs.add_expense(Expense("X", 0, "Food", "2026-01-01", "Monthly"))
+        assert not ok
+
+    def test_add_expense_duplicate_rejected(self, fs):
+        e = Expense("Rent", 800, "Housing", "2026-01-01", "Monthly")
+        fs.add_expense(e)
+        ok, msg = fs.add_expense(e)
+        assert not ok
+        assert "already exists" in msg.lower()
+
+    def test_delete_expense_success(self, fs):
+        fs.add_expense(Expense("Rent", 800, "Housing", "2026-01-01", "Monthly"))
+        ok, _ = fs.delete_expense("Rent")
+        assert ok
+        assert len(fs.expenses) == 0
+
+    def test_delete_nonexistent_expense_returns_false(self, fs):
+        ok, msg = fs.delete_expense("Ghost")
+        assert not ok
+
+    def test_set_balance_success(self, fs):
+        ok, msg = fs.set_balance(999.99)
+        assert ok
+        assert abs(fs.balance - 999.99) < 0.001
+
+    def test_set_balance_persists(self, fs):
+        fs.set_balance(1234.56)
+        assert abs(database.load_balance() - 1234.56) < 0.001
+
+    def test_set_balance_zero_is_valid(self, fs):
+        ok, _ = fs.set_balance(0.0)
+        assert ok
+
+    def test_set_balance_non_numeric_rejected(self, fs):
+        ok, _ = fs.set_balance("not a number")
+        assert not ok
+
+    def test_net_flow_reflects_added_job(self, fs):
+        fs.add_job(Job("Work", 500, "Weekly"))
+        fs.add_expense(Expense("Rent", 300, "Housing", "2026-01-01", "Weekly"))
+        assert abs(fs.net_weekly_flow() - 200.0) < 0.001
+
+    def test_financial_health_score_in_range(self, fs):
+        fs.add_job(Job("Work", 500, "Weekly"))
+        score = fs.financial_health_score()
+        assert 0 <= score <= 100
+
+    def test_risk_score_in_range(self, fs):
+        fs.add_job(Job("Work", 500, "Weekly"))
+        score = fs.risk_score()
+        assert 0 <= score <= 100
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  DAY 16 — database.py: settings and load_setting/save_setting
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestDatabaseSettings:
+
+    def test_load_setting_returns_default_when_missing(self, temp_db):
+        assert database.load_setting("missing_key", 42.0) == 42.0
+
+    def test_save_and_load_setting(self, temp_db):
+        database.save_setting("projection_weeks", 26)
+        assert database.load_setting("projection_weeks", 52) == 26
+
+    def test_save_setting_overwrites(self, temp_db):
+        database.save_setting("monte_carlo_runs", 100)
+        database.save_setting("monte_carlo_runs", 500)
+        assert database.load_setting("monte_carlo_runs", 0) == 500
+
+    def test_multiple_settings_independent(self, temp_db):
+        database.save_setting("a", 1.0)
+        database.save_setting("b", 2.0)
+        assert database.load_setting("a", 0) == 1.0
+        assert database.load_setting("b", 0) == 2.0
+
+    def test_setting_default_is_float(self, temp_db):
+        result = database.load_setting("nope", 7.5)
+        assert isinstance(result, float)
+
+    def test_save_balance_and_load_setting_dont_interfere(self, temp_db):
+        database.save_balance(999.0)
+        database.save_setting("projection_weeks", 12)
+        assert abs(database.load_balance() - 999.0) < 0.001
+        assert database.load_setting("projection_weeks", 0) == 12
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  DAY 17 — exceptions.py: ValidationError hierarchy and propagation
+# ═════════════════════════════════════════════════════════════════════════════
+
+from exceptions import ValidationError
+
+
+class TestValidationError:
+
+    def test_is_exception(self):
+        assert issubclass(ValidationError, Exception)
+
+    def test_can_be_raised_and_caught(self):
+        with pytest.raises(ValidationError):
+            raise ValidationError("bad input")
+
+    def test_message_preserved(self):
+        try:
+            raise ValidationError("amount must be positive")
+        except ValidationError as e:
+            assert "amount must be positive" in str(e)
+
+    def test_caught_by_exception_base(self):
+        with pytest.raises(Exception):
+            raise ValidationError("test")
+
+    def test_not_caught_by_value_error(self):
+        with pytest.raises(ValidationError):
+            try:
+                raise ValidationError("test")
+            except ValueError:
+                pass   # must NOT be caught here
+
+    def test_financial_state_raises_validation_error_on_bad_job(self, fs):
+        # FinancialState itself returns (False, msg) — ValidationError is for UI layer
+        ok, msg = fs.add_job(Job("", 0, "Weekly"))
+        assert not ok
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  DAY 18 — shift_parser and date_parser
+# ═════════════════════════════════════════════════════════════════════════════
+
+import shift_parser
+import date_parser
+
+
+class TestShiftParser:
+    """Tests for shift_parser's internal time-normalisation helpers and public API."""
+
+    def test_parse_time_token_24h(self):
+        # "14:30" should come back as "14:30"
+        assert shift_parser._parse_time_token("14:30") == "14:30"
+
+    def test_parse_time_token_midnight(self):
+        assert shift_parser._parse_time_token("00:00") == "00:00"
+
+    def test_parse_time_token_23_59(self):
+        assert shift_parser._parse_time_token("23:59") == "23:59"
+
+    def test_parse_time_token_invalid_raises(self):
+        with pytest.raises((ValidationError, ValueError, Exception)):
+            shift_parser._parse_time_token("25:00")
+
+    def test_parse_time_token_bad_minutes_raises(self):
+        with pytest.raises((ValidationError, ValueError, Exception)):
+            shift_parser._parse_time_token("10:99")
+
+    def test_normalize_hour_pm_rule(self):
+        # Hours 1-7 → PM (add 12)
+        assert shift_parser._normalize_hour("5") == 17
+
+    def test_normalize_hour_am_rule(self):
+        # Hours 8-12 → AM
+        assert shift_parser._normalize_hour("9") == 9
+
+    def test_normalize_hour_24h_passthrough(self):
+        assert shift_parser._normalize_hour("22") == 22
+
+    def test_parse_schedule_text_empty_returns_error(self):
+        result = shift_parser.parse_schedule_text("")
+        assert len(result.errors) > 0
+
+    def test_parse_schedule_text_valid_input(self):
+        text = "Job A: Mon 9-5 Wed 10-14"
+        result = shift_parser.parse_schedule_text(text)
+        # Should parse without fatal errors
+        assert isinstance(result.shifts, list)
+
+
+class TestDateParser:
+    """Tests for date_parser.parse_schedule public API."""
+
+    def test_parse_schedule_daily_mode(self):
+        text = "2026-06-15: Job A 09:00-17:00 @15"
+        result = date_parser.parse_schedule(text)
+        assert result.mode == "daily"
+
+    def test_parse_schedule_returns_result_object(self):
+        text = "2026-06-15: Job A 09:00-17:00 @15"
+        result = date_parser.parse_schedule(text)
+        assert hasattr(result, "shifts")
+        assert hasattr(result, "errors")
+
+    def test_parse_schedule_empty_input_gives_no_shifts(self):
+        result = date_parser.parse_schedule("")
+        assert len(result.shifts) == 0
+
+    def test_parse_schedule_bad_date_gives_no_shifts(self):
+        result = date_parser.parse_schedule("not-a-date: Job A 09:00-17:00")
+        assert len(result.shifts) == 0
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  DAY 19 — simulation edge cases
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestSimulationEdgeCases:
+
+    def test_whatif_zero_weeks_returns_empty_history(self, base_state):
+        result = simulate_whatif(base_state, "Test", 0, 0)
+        assert result["history"] == []
+
+    def test_whatif_very_large_positive_shock(self, base_state):
+        result = simulate_whatif(base_state, "Lottery", 1_000_000, 1)
+        assert result["history"][0]["balance"] > 1_000_000
+
+    def test_whatif_very_large_negative_shock(self, base_state):
+        result = simulate_whatif(base_state, "Disaster", -50_000, 1)
+        assert result["history"][0]["balance"] < 0   # balance can go negative
+
+    def test_monte_carlo_single_run_stable(self, base_state):
+        r = run_monte_carlo(base_state, weeks=4, n=1)
+        assert r["n"] == 1
+        assert len(r["ending_balances"]) == 1
+
+    def test_monte_carlo_zero_income_high_deficit_probability(self):
+        state = FakeState(
+            expenses=[Expense("E", 200, "Bills", "2024-01-01", "Weekly")],
+            balance=100.0,
+        )
+        r = run_monte_carlo(state, weeks=4, n=100)
+        # No income at all — should have very high deficit probability
+        assert r["deficit_probability"] > 50
+
+    def test_monte_carlo_high_income_low_deficit_probability(self):
+        state = FakeState(
+            jobs=[Job("Well paid", 5000, "Weekly")],
+            expenses=[Expense("E", 100, "Bills", "2024-01-01", "Weekly")],
+            balance=10_000.0,
+        )
+        r = run_monte_carlo(state, weeks=4, n=200)
+        assert r["deficit_probability"] < 50
+
+    def test_monte_carlo_worst_always_below_best(self, base_state):
+        r = run_monte_carlo(base_state, weeks=4, n=50)
+        assert r["worst_case"] <= r["best_case"]
+
+    def test_monte_carlo_large_n_completes_quickly(self, base_state):
+        import time
+        t0 = time.perf_counter()
+        run_monte_carlo(base_state, weeks=52, n=500)
+        assert time.perf_counter() - t0 < 5.0, "500-run Monte Carlo should finish in under 5s"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+#  DAY 20 — database.py: dedup_jobs and dedup_expenses
+# ═════════════════════════════════════════════════════════════════════════════
+
+class TestDedupJobs:
+
+    def _insert_raw(self, temp_db, rows):
+        """Insert (name, amount, frequency) rows directly — bypasses OR IGNORE."""
+        import sqlite3
+        with sqlite3.connect(temp_db) as conn:
+            for name, amount, freq in rows:
+                conn.execute(
+                    "INSERT INTO jobs (name, amount, frequency) VALUES (?, ?, ?)",
+                    (name, amount, freq),
+                )
+            conn.commit()
+
+    def test_identical_names_collapse_to_one(self, temp_db):
+        self._insert_raw(temp_db, [
+            ("Barista", 300, "Weekly"),
+            ("Barista", 200, "Weekly"),
+        ])
+        database.dedup_jobs()
+        assert len(database.load_jobs()) == 1
+
+    def test_highest_amount_is_kept(self, temp_db):
+        self._insert_raw(temp_db, [
+            ("Barista", 200, "Weekly"),
+            ("Barista", 300, "Weekly"),
+        ])
+        database.dedup_jobs()
+        jobs = database.load_jobs()
+        assert abs(jobs[0].amount - 300) < 0.01
+
+    def test_case_variants_collapse(self, temp_db):
+        self._insert_raw(temp_db, [
+            ("admissions", 400, "Weekly"),
+            ("Admissions", 500, "Weekly"),
+            ("ADMISSIONS", 300, "Weekly"),
+        ])
+        database.dedup_jobs()
+        assert len(database.load_jobs()) == 1
+
+    def test_name_is_canonicalized(self, temp_db):
+        self._insert_raw(temp_db, [("admissions", 400, "Weekly")])
+        database.dedup_jobs()
+        jobs = database.load_jobs()
+        assert jobs[0].name == "Admission"
+
+    def test_distinct_jobs_not_merged(self, temp_db):
+        self._insert_raw(temp_db, [
+            ("Barista", 300, "Weekly"),
+            ("Tutor",   200, "Weekly"),
+        ])
+        database.dedup_jobs()
+        assert len(database.load_jobs()) == 2
+
+    def test_no_jobs_does_not_crash(self, temp_db):
+        database.dedup_jobs()   # should not raise
+        assert database.load_jobs() == []
+
+    def test_single_job_unchanged(self, temp_db):
+        self._insert_raw(temp_db, [("Barista", 300, "Weekly")])
+        database.dedup_jobs()
+        jobs = database.load_jobs()
+        assert len(jobs) == 1
+        assert abs(jobs[0].amount - 300) < 0.01
+
+
+class TestDedupExpenses:
+
+    def _insert_raw(self, temp_db, rows):
+        """Insert (name, amount, category, date, frequency) rows directly."""
+        import sqlite3
+        with sqlite3.connect(temp_db) as conn:
+            for name, amount, cat, date, freq in rows:
+                conn.execute(
+                    "INSERT INTO expenses (name, amount, category, date, frequency) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (name, amount, cat, date, freq),
+                )
+            conn.commit()
+
+    def test_identical_names_collapse_to_one(self, temp_db):
+        self._insert_raw(temp_db, [
+            ("Rent", 800, "Housing", "2026-01-01", "Monthly"),
+            ("Rent", 900, "Housing", "2026-01-01", "Monthly"),
+        ])
+        database.dedup_expenses()
+        assert len(database.load_expenses()) == 1
+
+    def test_highest_amount_is_kept(self, temp_db):
+        self._insert_raw(temp_db, [
+            ("Rent", 800, "Housing", "2026-01-01", "Monthly"),
+            ("Rent", 900, "Housing", "2026-01-01", "Monthly"),
+        ])
+        database.dedup_expenses()
+        expenses = database.load_expenses()
+        assert abs(expenses[0].amount - 900) < 0.01
+
+    def test_case_variants_collapse(self, temp_db):
+        self._insert_raw(temp_db, [
+            ("rent",  800, "Housing", "2026-01-01", "Monthly"),
+            ("Rent",  900, "Housing", "2026-01-01", "Monthly"),
+            ("RENT",  700, "Housing", "2026-01-01", "Monthly"),
+        ])
+        database.dedup_expenses()
+        assert len(database.load_expenses()) == 1
+
+    def test_name_is_canonicalized(self, temp_db):
+        self._insert_raw(temp_db, [("rents", 800, "Housing", "2026-01-01", "Monthly")])
+        database.dedup_expenses()
+        expenses = database.load_expenses()
+        assert expenses[0].name == "Rent"
+
+    def test_distinct_expenses_not_merged(self, temp_db):
+        self._insert_raw(temp_db, [
+            ("Rent",  800, "Housing", "2026-01-01", "Monthly"),
+            ("Phone",  50, "Bills",   "2026-01-01", "Monthly"),
+        ])
+        database.dedup_expenses()
+        assert len(database.load_expenses()) == 2
+
+    def test_no_expenses_does_not_crash(self, temp_db):
+        database.dedup_expenses()
+        assert database.load_expenses() == []
+
+    def test_single_expense_unchanged(self, temp_db):
+        self._insert_raw(temp_db, [("Rent", 800, "Housing", "2026-01-01", "Monthly")])
+        database.dedup_expenses()
+        expenses = database.load_expenses()
+        assert len(expenses) == 1
+        assert abs(expenses[0].amount - 800) < 0.01
+
+    def test_dedup_jobs_and_expenses_independent(self, temp_db):
+        # Deduping jobs must not affect expenses and vice versa
+        database.insert_job(Job("Barista", 300, "Weekly"))
+        self._insert_raw(temp_db, [
+            ("Rent", 800, "Housing", "2026-01-01", "Monthly"),
+            ("Rent", 900, "Housing", "2026-01-01", "Monthly"),
+        ])
+        database.dedup_expenses()
+        assert len(database.load_jobs()) == 1
+        assert abs(database.load_jobs()[0].amount - 300) < 0.01
