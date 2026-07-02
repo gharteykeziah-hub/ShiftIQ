@@ -1576,9 +1576,25 @@ class TestSimulationEdgeCases:
 class TestDedupJobs:
 
     def _insert_raw(self, temp_db, rows):
-        """Insert (name, amount, frequency) rows directly — bypasses OR IGNORE."""
+        """Insert (name, amount, frequency) rows directly, bypassing UNIQUE constraint.
+
+        Rebuilds the jobs table without the UNIQUE index so duplicate names
+        can be inserted to exercise the dedup logic.
+        """
         import sqlite3
         with sqlite3.connect(temp_db) as conn:
+            conn.execute("ALTER TABLE jobs RENAME TO _jobs_bak")
+            conn.execute(
+                "CREATE TABLE jobs ("
+                "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  name TEXT, amount REAL, frequency TEXT DEFAULT 'Weekly'"
+                ")"
+            )
+            conn.execute(
+                "INSERT INTO jobs (id, name, amount, frequency)"
+                " SELECT id, name, amount, frequency FROM _jobs_bak"
+            )
+            conn.execute("DROP TABLE _jobs_bak")
             for name, amount, freq in rows:
                 conn.execute(
                     "INSERT INTO jobs (name, amount, frequency) VALUES (?, ?, ?)",
@@ -1641,13 +1657,30 @@ class TestDedupJobs:
 class TestDedupExpenses:
 
     def _insert_raw(self, temp_db, rows):
-        """Insert (name, amount, category, date, frequency) rows directly."""
+        """Insert (name, amount, category, date, frequency) rows, bypassing UNIQUE.
+
+        Rebuilds the expenses table without the UNIQUE index so duplicate names
+        can be inserted to exercise the dedup logic.
+        """
         import sqlite3
         with sqlite3.connect(temp_db) as conn:
+            conn.execute("ALTER TABLE expenses RENAME TO _expenses_bak")
+            conn.execute(
+                "CREATE TABLE expenses ("
+                "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  name TEXT, amount REAL, category TEXT, date TEXT,"
+                "  frequency TEXT DEFAULT 'Monthly'"
+                ")"
+            )
+            conn.execute(
+                "INSERT INTO expenses (id, name, amount, category, date, frequency)"
+                " SELECT id, name, amount, category, date, frequency FROM _expenses_bak"
+            )
+            conn.execute("DROP TABLE _expenses_bak")
             for name, amount, cat, date, freq in rows:
                 conn.execute(
-                    "INSERT INTO expenses (name, amount, category, date, frequency) "
-                    "VALUES (?, ?, ?, ?, ?)",
+                    "INSERT INTO expenses (name, amount, category, date, frequency)"
+                    " VALUES (?, ?, ?, ?, ?)",
                     (name, amount, cat, date, freq),
                 )
             conn.commit()
