@@ -4,15 +4,75 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](pyproject.toml)
 
-When income depends on time rather than a fixed salary, the standard model of financial software breaks down. There is no meaningful budget when the variable being budgeted against is itself a function of decisions not yet made.
+**ShiftIQ is a financial planning app for students and gig workers whose income changes every week.**
 
-ShiftIQ is a decision system built for this class of problem. Income is treated as a derived quantity, not an input:
+If your paycheck depends on how many shifts you pick up, ShiftIQ answers the questions that standard budgeting apps can't:
 
+- How much will I make this week if I take this shift?
+- What's my savings rate right now, and is it improving?
+- How long until I can afford that goal?
+- What's the riskiest part of my financial situation?
+
+You enter your jobs, your schedule, and your expenses. ShiftIQ calculates your income, net flow, savings rate, risk score, and balance projection — and updates everything the moment anything changes.
+
+---
+
+## Who It's For
+
+- **Campus workers** juggling two or three part-time jobs with variable hours
+- **Gig workers** (Uber, DoorDash, Instacart) tracking shift-by-shift earnings
+- **Students** who need to know whether picking up an extra Friday shift actually matters
+- **Anyone** whose income isn't a fixed number and whose budgeting app treats it like it is
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/gharteykeziah-hub/shiftiq.git
+cd shiftiq
+pip install -r requirements.txt
+python3 main.py
 ```
-Income = Σ (shift hours × hourly rate)
+
+> **macOS:** if the window appears blank on first launch, run `brew install python-tk`.
+
+To also run the API service:
+
+```bash
+pip install -r requirements-api.txt
+uvicorn api:app --reload
+# http://127.0.0.1:8000       -> browser frontend
+# http://127.0.0.1:8000/docs  -> Swagger docs
 ```
 
-The system takes a schedule as input and propagates it through a full state model in real time. Change a shift and weekly income, net flow, savings rate, risk score, and 52-week balance projection all update immediately. The core decision interface is `shift_impact()`, running in ~3 µs, which answers one question before any schedule change is committed: what does this cost? Behind it, a Monte Carlo engine runs 500 independent trajectories over a configurable horizon to quantify the uncertainty in that answer.
+---
+
+## What It Does
+
+**Schedule & Free Time** — Enter your weekly shifts. ShiftIQ finds every free block in your day, ranks your jobs by hourly rate, and shows you the earning potential of each gap.
+
+**Income Tracking** — All income runs through a state layer that converts weekly, biweekly, and monthly pay into a single weekly figure. Every number on screen comes from the same calculation.
+
+**Financial Health** — Net weekly flow, savings rate, and a 0–100 risk score that accounts for expense ratios, balance, and income stability. Updated in real time.
+
+**Projections & Scenarios** — See your projected balance at 4, 8, 12, 26, and 52 weeks. Run side-by-side what-if scenarios: what happens if you get a 10% raise, or add $50/week in income?
+
+**Shift Optimizer** — Picking shifts greedily by hourly rate is provably suboptimal. The optimizer solves it exactly via dynamic programming (0/1 knapsack) so you always know the highest-value combination of shifts that fits your available hours.
+
+**Monte Carlo Simulation** — 500 independent projections of your financial life over a configurable horizon, sampling real-world variability (cut hours, extra shifts, unexpected expenses). Gives you a distribution over outcomes, not a single guess.
+
+---
+
+## Testing
+
+166 pytest tests across 19 classes with no GUI instantiation and no live database. The test suite covers the knapsack optimizer including the greedy counterexample regression, Monte Carlo output stability, overnight shift edge cases, and database integrity.
+
+```bash
+python3 -m pytest test_fre.py -v
+```
+
+GitHub Actions runs the full suite on every push across Python 3.10, 3.11, and 3.12.
 
 ---
 
@@ -56,15 +116,11 @@ result = optimize_shift_selection(candidates, max_hours=10)
 # knapsack picks Y + Z:   $190  <- provably optimal
 ```
 
-The test suite includes a dedicated regression test that asserts the DP solution outperforms greedy on this exact counterexample.
-
 ---
 
 ## Monte Carlo Simulation
 
-A point estimate of future balance ignores the variance inherent in schedule-dependent income. The simulation runs 500 independent trajectories over a configurable horizon, sampling 10 stochastic weekly events per run that represent the real variability in shift-based work: hours cut, tips lost, extra shifts picked up, unexpected expenses. The result is a distribution over outcomes, not a single projection.
-
-The original implementation nested Python loops across runs, weeks, and events. The current version draws all random values in a single batched NumPy call and applies boolean masks across the full array at once:
+The simulation runs 500 independent trajectories over a configurable horizon, sampling 10 stochastic weekly events per run. The original implementation nested Python loops across runs, weeks, and events. The current version draws all random values in a single batched NumPy call and applies boolean masks across the full array at once:
 
 | Scenario | Pure Python | Vectorized | Speedup |
 |---|---|---|---|
@@ -73,18 +129,6 @@ The original implementation nested Python loops across runs, weeks, and events. 
 | 5,000 runs / 52 weeks | 282.2 ms | 44.8 ms | **6.3x** |
 
 Reproduce: `python3 scripts/benchmark_monte_carlo.py`
-
----
-
-## Testing
-
-166 pytest tests across 19 classes with no GUI instantiation and no live database. This is a direct consequence of the architecture: because the analytics layer is pure and the state layer has no UI dependencies, a `FakeState` protocol mirroring the state layer's public interface is sufficient for full calculation coverage in isolation. The test suite covers the knapsack optimizer including the greedy counterexample regression, Monte Carlo output stability, overnight shift edge cases, and database integrity.
-
-```bash
-python3 -m pytest test_fre.py -v
-```
-
-GitHub Actions runs the full suite on every push across Python 3.10, 3.11, and 3.12.
 
 ---
 
@@ -103,6 +147,8 @@ GitHub Actions runs the full suite on every push across Python 3.10, 3.11, and 3
 ├── api.py                  # FastAPI service, zero-logic transport over engine
 ├── app.py                  # Desktop app shell, DI container, 3-item nav
 ├── page_home.py            # Home: shift strip, tap-impact cards, optimizer
+├── exceptions.py           # Shared exception classes (ValidationError)
+├── config.py               # All constants in one place
 ├── test_fre.py             # 166 tests, no GUI or DB required
 └── scripts/
     └── benchmark_monte_carlo.py
@@ -114,28 +160,4 @@ GitHub Actions runs the full suite on every push across Python 3.10, 3.11, and 3
 
 Python 3.10+, SQLite, NumPy, matplotlib, reportlab, pytest, FastAPI, Pydantic v2. No ORM. No frontend build step. The API layer is opt-in and adds zero dependencies to the desktop app.
 
----
-
-## Quick Start
-
-```bash
-git clone https://github.com/gharteykeziah-hub/shiftiq.git
-cd shiftiq
-pip install -r requirements.txt
-python3 main.py
-```
-
-> **macOS:** if the window appears blank on first launch, run `brew install python-tk`.
-
-To also run the API service:
-
-```bash
-pip install -r requirements-api.txt
-uvicorn api:app --reload
-# http://127.0.0.1:8000       -> browser frontend
-# http://127.0.0.1:8000/docs  -> Swagger docs
-```
-
 `render.yaml` is included for one-command deployment to Render, Railway, or Heroku.
-# GitHub sync fix
-test commit for GitHub graph
