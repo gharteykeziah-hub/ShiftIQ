@@ -32,8 +32,25 @@ logger = logging.getLogger(__name__)
 
 
 class FinancialState:
+    """
+    Central state manager for ShiftIQ.
+
+    Loads all financial data from the database on construction and exposes
+    the full calculation layer — income, expenses, balance, projections,
+    scores, and goals — as plain method calls.
+
+    Every number displayed anywhere in the app comes from this class.
+    Nothing outside it replicates these calculations.
+
+    Attributes
+    ----------
+    balance  : current saved balance (float)
+    jobs     : list of Job objects (income sources)
+    expenses : list of Expense objects
+    """
 
     def __init__(self) -> None:
+        """Load all data from the database and record today's snapshot."""
         db.init_db()
         self.balance:  float         = db.load_balance()
         self.jobs:     list[Job]     = db.load_jobs()
@@ -49,8 +66,6 @@ class FinancialState:
             self.total_expense_per_week(),
             self.net_weekly_flow(),
         )
-
-    # ── Jobs ──────────────────────────────────────────────────────────────────
 
     # ── Validation ────────────────────────────────────────────────────────────
 
@@ -196,12 +211,13 @@ class FinancialState:
 
     def projected_income(self, weeks: int, scenario: dict | None = None) -> float:
         """
-        Total projected income over N weeks.
+        Total projected income over N weeks, with an optional scenario adjustment.
+
         scenario dict keys:
-          raise_percent — multiplier on all existing income (0.1 = 10% raise)
-          extra_weekly  — flat extra $ per week added on top
-        Bug fix: raise_percent and extra_weekly apply once to the total,
-        not multiplied per job inside the loop.
+          raise_percent — fractional raise on all existing income (0.1 = 10% raise)
+          extra_weekly  — flat extra dollars per week added on top of current income
+
+        Both adjustments are applied once to the weekly total, not per job.
         """
         scenario      = scenario or {}
         raise_percent = scenario.get("raise_percent", 0.0)
