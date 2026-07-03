@@ -1,0 +1,28 @@
+# Never include these in the Docker image
+
+# Secrets and local config
+.env
+*.db
+backup_*.db
+
+# Test files (not needed in production)
+test_*.py
+.pytest_cache/
+.coverage
+
+# Desktop app (not needed in the API container)
+main.py
+
+# Dev tooling
+.git/
+.github/
+__pycache__/
+*.pyc
+*.pyo
+*.log
+
+# Docs and planning files
+*.md
+*.pdf
+*.docx
+FRE_Finishing_Plan.md
