@@ -1,15 +1,28 @@
-# Financial Reality Engine — API deployment dependencies
+# ShiftIQ — API deployment dependencies
 #
-# This is a SEPARATE file from requirements.txt because the desktop app
-# needs tkinter (stdlib, not pip-installable) and the `schedule` package,
-# neither of which the API service uses or needs. Cloud hosts (Render,
-# Fly.io, Railway, etc.) install from THIS file, not requirements.txt.
+# Used by cloud hosts (AWS App Runner, Render, etc.) and the CI api-smoke-test job.
+# Separate from requirements.txt because the desktop app needs tkinter and
+# the `schedule` package — neither of which the API service needs.
 #
 # Install with: pip install -r requirements-api.txt
 
-matplotlib>=3.9.0
-reportlab>=4.0.0
-numpy>=1.26.0
-fastapi>=0.110.0
-uvicorn[standard]>=0.29.0
-pydantic>=2.6.0
+# ── Core engine dependencies ──────────────────────────────────────────────────
+matplotlib>=3.9.0,<4.0
+reportlab>=4.0.0,<5.0
+numpy>=1.26.0,<3.0
+
+# ── API framework ─────────────────────────────────────────────────────────────
+fastapi>=0.110.0,<1.0
+uvicorn[standard]>=0.29.0,<1.0
+pydantic>=2.6.0,<3.0
+httpx>=0.27.0,<1.0          # required by FastAPI TestClient
+
+# ── Database ──────────────────────────────────────────────────────────────────
+psycopg2-binary>=2.9.0,<3.0  # PostgreSQL driver (production)
+SQLAlchemy>=2.0.0,<3.0       # database abstraction layer
+
+# ── Config ────────────────────────────────────────────────────────────────────
+python-dotenv>=1.0.0,<2.0    # load .env for local dev
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=8.0.0,<9.0
