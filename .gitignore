@@ -11,6 +11,9 @@ venv/
 env/
 .env/
 
+# ── Environment variables (never commit real secrets) ─────────────────────────
+.env
+
 # ── Database files ────────────────────────────────────────────────────────────
 # Users create their own finance.db when they first run the app.
 # Backups are also personal and should not be committed.

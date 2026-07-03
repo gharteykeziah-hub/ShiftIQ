@@ -23,6 +23,9 @@ from __future__ import annotations
 import os
 from typing import Optional
 
+from dotenv import load_dotenv
+load_dotenv()  # loads .env when running locally; no-op in production
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
