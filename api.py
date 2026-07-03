@@ -33,6 +33,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 import database as db
+import db_pg
+from db_connection import get_connection, is_postgres
 from financial_state import FinancialState
 from insight_engine import InsightEngine
 from simulation import run_monte_carlo, simulate_whatif
@@ -58,6 +60,27 @@ app.add_middleware(
 )
 
 _insight_engine = InsightEngine()
+
+
+# ── Startup ───────────────────────────────────────────────────────────────────
+
+@app.on_event("startup")
+def _startup() -> None:
+    """
+    Initialise the database on startup.
+
+    - DATABASE_URL not set  →  SQLite via database.init_db()
+    - DATABASE_URL set      →  PostgreSQL via db_pg.init_db()
+
+    No other code needs to know which backend is active — get_connection()
+    handles that transparently for every query.
+    """
+    if is_postgres():
+        with get_connection() as conn:
+            db_pg.init_db(conn)
+    else:
+        db.init_db()
+        db.init_events_table()
 
 
 def _get_state() -> FinancialState:
