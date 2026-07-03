@@ -46,7 +46,7 @@ from config import MONTE_CARLO_RUNS
 app = FastAPI(
     title="ShiftIQ API",
     description="Schedule-driven financial simulation engine, exposed over HTTP.",
-    version="1.2.0",
+    version="1.3.0",
 )
 
 # Allow the React dev server (port 3000) and any deployed frontend to call the API.

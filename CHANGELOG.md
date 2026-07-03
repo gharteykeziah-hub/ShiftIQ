@@ -5,6 +5,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0] — 2026-07-03
+
+### Added
+- `PUT /api/balance` — update current balance via API
+- `GET /api/projection` — week-by-week balance projection over N weeks
+- `GET /api/insights` — InsightEngine output (health label, risk label, insights list)
+- `GET /api/history` — historical daily snapshots for trend charts
+- `PUT /api/jobs/{name}` — edit an existing job's amount or frequency
+- `PUT /api/expenses/{name}` — edit an existing expense
+- CORS middleware — React frontend can call the API from any origin
+- `python-dotenv` — environment variables loaded from `.env` for local dev
+- `.env.example` — template showing all required environment variables
+- `psycopg2-binary` and `SQLAlchemy` — PostgreSQL driver and abstraction layer
+- `db_connection.py` — single connection layer routing to SQLite or PostgreSQL
+- `db_pg.py` — PostgreSQL-compatible SQL for all core database operations
+- `scripts/migrate_to_postgres.py` — one-time migration from SQLite to PostgreSQL
+- `test_api.py` — 32 FastAPI TestClient tests covering every Phase 1 endpoint
+- `scripts/test_api.sh` — curl smoke test for all endpoints against a live server
+- `Dockerfile` — containerises the FastAPI backend for AWS App Runner
+- `docker-compose.yml` — local dev environment with FastAPI + PostgreSQL
+
+### Changed
+- `database.py` now routes all connections through `db_connection.get_connection()`
+- API version bumped to `1.3.0`
+- `requirements-api.txt` updated with all new dependencies
+- CI workflow now runs `test_api.py` in both test matrix and api-smoke-test jobs
+
+---
+
 ## [1.2.0] — 2026-07-02
 
 ### Added
