@@ -26,7 +26,8 @@ from __future__ import annotations
 import sqlite3   # kept for init_db migration (PRAGMA is SQLite-only)
 import os
 from model import Job, Expense
-from db_connection import get_connection, SQLITE_FILE
+import db_connection
+from db_connection import get_connection
 from utils import canon_name
 
 
@@ -542,7 +543,8 @@ def backup_database() -> str:
     """
     import datetime, shutil
     today   = datetime.date.today().isoformat()
-    folder  = os.path.dirname(SQLITE_FILE)
+    sqlite_file = db_connection.SQLITE_FILE
+    folder  = os.path.dirname(sqlite_file) or '.'
     dest    = os.path.join(folder, f"backup_{today}.db")
-    shutil.copy2(SQLITE_FILE, dest)
+    shutil.copy2(sqlite_file, dest)
     return dest
