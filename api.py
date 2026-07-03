@@ -170,6 +170,21 @@ def add_job(job_in: JobIn) -> JobOut:
                   weekly_income=round(job.weekly_income(), 2))
 
 
+@app.put("/api/jobs/{name}", response_model=JobOut)
+def update_job(name: str, job_in: JobIn) -> JobOut:
+    """Update an existing job's amount and/or frequency by name."""
+    state = _get_state()
+    ok, message = state.delete_job(name)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Job '{name}' not found.")
+    job = Job(job_in.name, job_in.amount, job_in.frequency)
+    ok, message = state.add_job(job)
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return JobOut(name=job.name, amount=job.amount, frequency=job.frequency,
+                  weekly_income=round(job.weekly_income(), 2))
+
+
 @app.delete("/api/jobs/{name}")
 def delete_job(name: str) -> dict:
     state = _get_state()
