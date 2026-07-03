@@ -94,6 +94,10 @@ class StateSummary(BaseModel):
     health_score: int
 
 
+class BalanceIn(BaseModel):
+    amount: float = Field(ge=0, description="New balance in dollars (must be 0 or greater)")
+
+
 class MonteCarloRequest(BaseModel):
     weeks: int = Field(gt=0, le=520)
     n: int = Field(default=MONTE_CARLO_RUNS, gt=0, le=10_000)
@@ -130,6 +134,18 @@ def get_state_summary() -> StateSummary:
         risk_score=state.risk_score(),
         health_score=state.financial_health_score(),
     )
+
+
+# ── Balance ───────────────────────────────────────────────────────────────────
+
+@app.put("/api/balance")
+def update_balance(body: BalanceIn) -> dict:
+    """Update the current saved balance."""
+    state = _get_state()
+    ok, message = state.set_balance(body.amount)
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return {"balance": body.amount, "message": message}
 
 
 # ── Jobs ──────────────────────────────────────────────────────────────────────
