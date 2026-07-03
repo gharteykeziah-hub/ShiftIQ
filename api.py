@@ -220,6 +220,24 @@ def add_expense(expense_in: ExpenseIn) -> ExpenseOut:
                       weekly_amount=round(expense.weekly_amount(), 2))
 
 
+@app.put("/api/expenses/{name}", response_model=ExpenseOut)
+def update_expense(name: str, expense_in: ExpenseIn) -> ExpenseOut:
+    """Update an existing expense by name."""
+    state = _get_state()
+    ok, message = state.delete_expense(name)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"Expense '{name}' not found.")
+    expense = Expense(expense_in.name, expense_in.amount, expense_in.category,
+                      expense_in.date, expense_in.frequency)
+    ok, message = state.add_expense(expense)
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return ExpenseOut(name=expense.name, amount=expense.amount,
+                      category=expense.category, date=expense.date,
+                      frequency=expense.frequency,
+                      weekly_amount=round(expense.weekly_amount(), 2))
+
+
 @app.delete("/api/expenses/{name}")
 def delete_expense(name: str) -> dict:
     state = _get_state()
