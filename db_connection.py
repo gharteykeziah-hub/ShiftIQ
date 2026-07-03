@@ -26,9 +26,13 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")  # empty = use SQLite
 SQLITE_FILE  = os.getenv("SQLITE_FILE", "finance.db")
 
 
-def _is_postgres() -> bool:
+def is_postgres() -> bool:
     """True when a PostgreSQL DATABASE_URL is configured."""
     return bool(DATABASE_URL and DATABASE_URL.startswith("postgresql"))
+
+
+# Keep old private name as alias so existing callers don't break
+_is_postgres = is_postgres
 
 
 @contextmanager
