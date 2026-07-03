@@ -24,6 +24,7 @@ import os
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -40,7 +41,17 @@ from config import MONTE_CARLO_RUNS
 app = FastAPI(
     title="ShiftIQ API",
     description="Schedule-driven financial simulation engine, exposed over HTTP.",
-    version="1.1.0",
+    version="1.2.0",
+)
+
+# Allow the React dev server (port 3000) and any deployed frontend to call the API.
+# In production, replace "*" with your actual frontend domain for tighter security.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 _insight_engine = InsightEngine()
