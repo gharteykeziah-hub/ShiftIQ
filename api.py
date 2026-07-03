@@ -214,6 +214,18 @@ def delete_expense(name: str) -> dict:
     return {"message": message}
 
 
+# ── History ───────────────────────────────────────────────────────────────────
+
+@app.get("/api/history")
+def get_history() -> dict:
+    """Return all daily financial snapshots ordered by date ascending."""
+    snapshots = db.load_history()
+    return {
+        "count": len(snapshots),
+        "snapshots": snapshots,
+    }
+
+
 # ── Insights ──────────────────────────────────────────────────────────────────
 
 @app.get("/api/insights")
