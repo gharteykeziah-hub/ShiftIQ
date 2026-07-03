@@ -31,8 +31,11 @@ jobs:
           pip install -r requirements.txt
           pip install numpy
 
+      - name: Install API dependencies
+        run: pip install fastapi "uvicorn[standard]" pydantic httpx
+
       - name: Run test suite
-        run: python -m pytest test_fre.py -v
+        run: python -m pytest test_fre.py test_api.py -v
 
   api-smoke-test:
     runs-on: ubuntu-latest
