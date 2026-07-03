@@ -1,5 +1,9 @@
 """
-database.py — SQLite persistence for ShiftIQ.
+database.py — Database persistence for ShiftIQ.
+
+Uses db_connection.get_connection() for all queries — works with
+SQLite locally and PostgreSQL in production. Switch by setting the
+DATABASE_URL environment variable (see .env.example).
 
 All reads and writes go through this module. No other module issues raw SQL.
 Uses context managers throughout so connections are always closed safely.
@@ -19,16 +23,16 @@ entries created by variant spellings (e.g. 'admissions' / 'Admissions').
 from __future__ import annotations
 
 
-import sqlite3
+import sqlite3   # kept for init_db migration (PRAGMA is SQLite-only)
 import os
 from model import Job, Expense
-from config import DB_NAME
+from db_connection import get_connection, SQLITE_FILE
 from utils import canon_name
 
 
 def init_db() -> None:
     """Create tables if they don't exist. Migrates old schema automatically."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         c = conn.cursor()
 
         c.execute("""
@@ -99,14 +103,14 @@ def init_db() -> None:
 
 def load_balance() -> float:
     """Load the saved balance from settings."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         row = conn.execute("SELECT value FROM settings WHERE key = 'balance'").fetchone()
     return row[0] if row else 0.0
 
 
 def save_balance(balance: float) -> None:
     """Persist the current balance."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES ('balance', ?)",
             (balance,)
@@ -116,14 +120,14 @@ def save_balance(balance: float) -> None:
 
 def load_setting(key: str, default: float) -> float:
     """Load a named setting. Returns default if not found."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     return row[0] if row else default
 
 
 def save_setting(key: str, value: float) -> None:
     """Persist a named setting."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
             (key, value)
@@ -133,14 +137,14 @@ def save_setting(key: str, value: float) -> None:
 
 def load_jobs() -> list[Job]:
     """Load all jobs from the database."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         rows = conn.execute("SELECT name, amount, frequency FROM jobs").fetchall()
     return [Job(name, amount, frequency) for name, amount, frequency in rows]
 
 
 def insert_job(job: Job) -> None:
     """Insert a new job. Ignores duplicates (name is UNIQUE)."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO jobs (name, amount, frequency) VALUES (?, ?, ?)",
             (job.name, job.amount, job.frequency)
@@ -150,7 +154,7 @@ def insert_job(job: Job) -> None:
 
 def remove_job(name: str) -> None:
     """Delete a job by name."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute("DELETE FROM jobs WHERE name = ?", (name,))
         conn.commit()
 
@@ -189,7 +193,7 @@ def dedup_jobs() -> None:
     'admissions', 'Admissions', 'admission' → one 'Admissions' entry.
     Keeps the row with the highest amount.
     """
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             "SELECT id, name, amount FROM jobs ORDER BY amount DESC"
         ).fetchall()
@@ -215,7 +219,7 @@ def dedup_expenses() -> None:
     Canonical-deduplicate expenses table on startup.
     'rent', 'Rent', 'rents' → one 'Rent' entry (highest amount kept).
     """
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             "SELECT id, name, amount FROM expenses ORDER BY amount DESC"
         ).fetchall()
@@ -241,7 +245,7 @@ def update_events_rate(job_title: str, rate: float, threshold: float = 0.82) -> 
     'admission', 'Admissions', 'admissions' all update together.
     """
     target_canon = _canon_db(job_title)
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         titles = conn.execute(
             "SELECT DISTINCT title FROM events WHERE category = 'Work'"
         ).fetchall()
@@ -257,14 +261,14 @@ def update_events_rate(job_title: str, rate: float, threshold: float = 0.82) -> 
 
 def update_job_amount(name: str, amount: float) -> None:
     """Update the income amount for an existing job (used by schedule sync)."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute("UPDATE jobs SET amount = ? WHERE name = ?", (amount, name))
         conn.commit()
 
 
 def load_expenses() -> list[Expense]:
     """Load all expenses from the database."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             "SELECT name, amount, category, date, frequency FROM expenses"
         ).fetchall()
@@ -274,7 +278,7 @@ def load_expenses() -> list[Expense]:
 
 def insert_expense(expense: Expense) -> None:
     """Insert a new expense. Ignores duplicates (name is UNIQUE)."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute(
             "INSERT OR IGNORE INTO expenses (name, amount, category, date, frequency) VALUES (?, ?, ?, ?, ?)",
             (expense.name, expense.amount, expense.category, expense.date, expense.frequency)
@@ -284,7 +288,7 @@ def insert_expense(expense: Expense) -> None:
 
 def remove_expense(name: str) -> None:
     """Delete an expense by name."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute("DELETE FROM expenses WHERE name = ?", (name,))
         conn.commit()
 
@@ -298,7 +302,7 @@ def record_snapshot(balance: float, income: float, expenses: float, net: float) 
     """
     import datetime
     today = datetime.date.today().isoformat()
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute("""
             INSERT INTO history (date, balance, income_weekly, expenses_weekly, net_weekly)
             VALUES (?, ?, ?, ?, ?)
@@ -313,7 +317,7 @@ def record_snapshot(balance: float, income: float, expenses: float, net: float) 
 
 def load_history() -> list[dict]:
     """Return all history snapshots ordered by date ascending."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         rows = conn.execute("""
             SELECT date, balance, income_weekly, expenses_weekly, net_weekly
             FROM history ORDER BY date ASC
@@ -329,7 +333,7 @@ def load_history() -> list[dict]:
 
 def init_events_table() -> None:
     """Create the events table if it does not yet exist, and migrate schema."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS events (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -357,7 +361,7 @@ def add_event(event) -> int:
     shift_date is stored when present; defaults to '' for legacy callers.
     """
     shift_date = getattr(event, "shift_date", "") or ""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         cur = conn.execute(
             """INSERT INTO events
                    (title, category, day, start_time, end_time,
@@ -378,7 +382,7 @@ def get_events(day: str | None = None) -> list:
     Returns a list of ScheduleEvent instances.
     """
     from schedule_event import ScheduleEvent
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         if day:
             rows = conn.execute(
                 "SELECT id, title, category, day, start_time, end_time, "
@@ -420,7 +424,7 @@ def get_events_for_week(week_start) -> list:
     start_s  = week_start.isoformat()
     end_s    = week_end.isoformat()
 
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             "SELECT id, title, category, day, start_time, end_time, "
             "hourly_rate, notes, shift_date "
@@ -453,7 +457,7 @@ def update_event(event_id: int, **fields) -> None:
         return
     cols = ", ".join(f"{k} = ?" for k in updates)
     vals = list(updates.values()) + [event_id]
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute(f"UPDATE events SET {cols} WHERE id = ?", vals)
         conn.commit()
 
@@ -464,7 +468,7 @@ def get_events_for_date(date_str: str) -> list:
     *date_str* must be ISO "YYYY-MM-DD".
     """
     from schedule_event import ScheduleEvent
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             "SELECT id, title, category, day, start_time, end_time, "
             "hourly_rate, notes, shift_date "
@@ -490,7 +494,7 @@ def get_events_for_date_range(start_str: str, end_str: str) -> list:
     Results are sorted by shift_date, then start_time.
     """
     from schedule_event import ScheduleEvent
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         rows = conn.execute(
             "SELECT id, title, category, day, start_time, end_time, "
             "hourly_rate, notes, shift_date "
@@ -524,7 +528,7 @@ def get_events_for_month(year: int, month: int) -> list:
 
 def delete_event_by_id(event_id: int) -> None:
     """Delete an event by its primary key."""
-    with sqlite3.connect(DB_NAME) as conn:
+    with get_connection() as conn:
         conn.execute("DELETE FROM events WHERE id = ?", (event_id,))
         conn.commit()
 
@@ -538,7 +542,7 @@ def backup_database() -> str:
     """
     import datetime, shutil
     today   = datetime.date.today().isoformat()
-    folder  = os.path.dirname(DB_NAME)
+    folder  = os.path.dirname(SQLITE_FILE)
     dest    = os.path.join(folder, f"backup_{today}.db")
-    shutil.copy2(DB_NAME, dest)
+    shutil.copy2(SQLITE_FILE, dest)
     return dest

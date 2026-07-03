@@ -20,6 +20,7 @@ from insight_engine import InsightEngine
 from scenario_engine import ScenarioEngine, Scenario
 from simulation import simulate_whatif, run_monte_carlo
 import database
+import db_connection
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -677,9 +678,9 @@ class TestMonteCarlo:
 
 @pytest.fixture
 def temp_db(monkeypatch, tmp_path):
-    """Point database.DB_NAME at a fresh temp file for each test."""
+    """Point db_connection.SQLITE_FILE at a fresh temp file for each test."""
     db_file = str(tmp_path / "test_fre.db")
-    monkeypatch.setattr(database, "DB_NAME", db_file)
+    monkeypatch.setattr(db_connection, "SQLITE_FILE", db_file)
     database.init_db()
     return db_file
 
@@ -1246,7 +1247,7 @@ import financial_state as fs_module
 def fs(monkeypatch, tmp_path):
     """Real FinancialState wired to an empty temp database."""
     db_file = str(tmp_path / "fs_test.db")
-    monkeypatch.setattr(database, "DB_NAME", db_file)
+    monkeypatch.setattr(db_connection, "SQLITE_FILE", db_file)
     monkeypatch.setattr(fs_module, "activity_log", type("_", (), {"log": staticmethod(lambda *a: None)})())
     return fs_module.FinancialState()
 
