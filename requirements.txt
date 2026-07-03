@@ -12,4 +12,6 @@ reportlab>=4.0.0,<5.0
 schedule>=1.2.0,<2.0
 numpy>=1.26.0,<3.0          # vectorized Monte Carlo simulation
 python-dotenv>=1.0.0,<2.0   # load .env files for local dev
+psycopg2-binary>=2.9.0,<3.0  # PostgreSQL driver
+SQLAlchemy>=2.0.0,<3.0       # database abstraction layer (SQLite + PostgreSQL)
 pytest>=8.0.0,<9.0     # test suite only
