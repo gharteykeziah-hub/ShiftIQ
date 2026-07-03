@@ -214,6 +214,26 @@ def delete_expense(name: str) -> dict:
     return {"message": message}
 
 
+# ── Projection ────────────────────────────────────────────────────────────────
+
+@app.get("/api/projection")
+def get_projection(weeks: int = 12) -> dict:
+    """Project balance week-by-week over the next N weeks (default 12)."""
+    if weeks < 1 or weeks > 520:
+        raise HTTPException(status_code=400, detail="weeks must be between 1 and 520.")
+    state = _get_state()
+    timeline = [
+        {"week": w, "balance": round(state.project_balance(w), 2)}
+        for w in range(1, weeks + 1)
+    ]
+    return {
+        "weeks": weeks,
+        "starting_balance": state.current_balance(),
+        "net_weekly_flow": round(state.net_weekly_flow(), 2),
+        "timeline": timeline,
+    }
+
+
 # ── Schedule analytics ────────────────────────────────────────────────────────
 
 @app.get("/api/analytics/income")
